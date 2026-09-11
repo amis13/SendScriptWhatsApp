@@ -1,12 +1,11 @@
 async function enviarScript(scriptText) {
     const lines = scriptText.split(/[\n\t]+/).map(l => l.trim()).filter(Boolean);
     
-    // Busca la caja de texto editable
-    const input = document.querySelector('footer div[contenteditable="true"]') || 
-                  document.querySelector('#main div[contenteditable="true"]');
+    const footer = document.querySelector('footer');
+    const input = footer ? footer.querySelector('div[contenteditable="true"]') : null;
 
     if (!input) {
-        console.error("No se encontró la caja de texto. Haz clic primero en el chat.");
+        console.error("Haz clic primero dentro del chat para enfocar la caja de texto.");
         return;
     }
 
@@ -14,30 +13,35 @@ async function enviarScript(scriptText) {
         const line = lines[i];
         
         input.focus();
-        
-        // Escribe el texto forzando el evento de React
+
+        // 1. Limpiar restos previos y escribir la línea
+        document.execCommand('selectAll', false, null);
+        document.execCommand('delete', false, null);
         document.execCommand('insertText', false, line);
-        input.dispatchEvent(new Event('input', { bubbles: true }));
 
-        // Espera mínima para que el DOM renderice el botón de enviar
-        await new Promise(r => setTimeout(r, 150));
+        // 2. Notificar a React del cambio de contenido
+        input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: line }));
 
-        // Selector exacto extraído de tu HTML
-        const sendBtn = document.querySelector('button[aria-label="Enviar"]') || 
-                        document.querySelector('button[data-tab="11"]') ||
-                        document.querySelector('span[data-icon="wds-ic-send-filled"]')?.closest('button');
+        // 3. Esperar a que WhatsApp desmonte el micro y monte el botón de enviar
+        await new Promise(r => setTimeout(r, 200));
+
+        // 4. Selector ultra-específico: SÓLO el botón que contiene el icono del avión de papel
+        const sendBtn = footer.querySelector('span[data-icon="wds-ic-send-filled"]')?.closest('button') ||
+                        footer.querySelector('button:has(span[data-icon="wds-ic-send-filled"])');
 
         if (sendBtn) {
             sendBtn.click();
         } else {
-            console.warn(`Línea ${i + 1}: Botón no encontrado, saltando...`);
+            // Plan B si el botón no aparece: disparar Enter directamente al input
+            const enterOpts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+            input.dispatchEvent(new KeyboardEvent('keydown', enterOpts));
         }
 
-        // Pausa entre mensajes para no saturar
+        // Pausa entre mensajes para evitar desincronización
         await new Promise(r => setTimeout(r, 350));
     }
-    
-    console.log("¡Completado!");
+
+    console.log("Terminado con éxito.");
 }
 
 enviarScript(`
