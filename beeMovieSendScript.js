@@ -1,48 +1,51 @@
 async function enviarScript(scriptText) {
-    const lines = scriptText.split(/[\n\t]+/).map(line => line.trim()).filter(line => line);
-    
-    // Localizar el cuadro editable del chat activo
-    const main = document.querySelector("#main") || document.querySelector('[data-testid="conversation-panel-wrapper"]');
-    const textarea = main ? main.querySelector('div[contenteditable="true"]') : null;
+    const lines = scriptText.split(/[\n\t]+/).map(l => l.trim()).filter(Boolean);
 
-    if (!textarea) {
-        throw new Error("Abre primero una conversación en WhatsApp Web.");
+    // 1. Haz click manualmente en la caja de texto antes de darle al Play
+    let input = document.activeElement;
+    if (!input || input.getAttribute('contenteditable') !== 'true') {
+        input = document.querySelector('footer div[contenteditable="true"]');
+    }
+
+    if (!input) {
+        alert("Haz clic dentro de la caja de texto de WhatsApp antes de ejecutar esto.");
+        return;
     }
 
     for (const line of lines) {
-        textarea.focus();
-        
-        // Escribir texto
+        input.focus();
+
+        // 2. Inserción de texto compatible con el estado de React
+        const inputEvent = new InputEvent('beforeinput', {
+            bubbles: true,
+            cancelable: true,
+            inputType: 'insertText',
+            data: line
+        });
+        input.dispatchEvent(inputEvent);
         document.execCommand('insertText', false, line);
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
 
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(r => setTimeout(r, 150));
 
-        // Buscar el botón de envío por iconos SVG o selectores aria actuales
-        const sendBtn = main.querySelector('button span[data-icon="send"]')?.closest('button') ||
-                        main.querySelector('button[aria-label="Enviar"]') ||
-                        main.querySelector('button[aria-label="Send"]') ||
-                        main.querySelector('span[data-icon="send-light"]')?.closest('button');
+        // 3. Buscar el botón de envío en todo el pie de página (footer)
+        const footer = input.closest('footer') || document.querySelector('#main footer');
+        const sendBtn = footer ? footer.querySelector('button:has(svg), button[aria-label*="enviar" i], button[aria-label*="send" i]') : null;
 
-        if (sendBtn) {
+        // Si el botón es el del micrófono, NO hacer click (significa que no detectó texto)
+        const isMic = sendBtn && sendBtn.querySelector('[data-icon="mic"]');
+
+        if (sendBtn && !isMic) {
             sendBtn.click();
         } else {
-            // Si el botón no aparece, forzar el Enter directo al contenedor
-            const enterDown = new KeyboardEvent('keydown', {
-                key: 'Enter',
-                code: 'Enter',
-                keyCode: 13,
-                which: 13,
-                bubbles: true,
-                cancelable: true
-            });
-            textarea.dispatchEvent(enterDown);
+            // Si no encuentra el botón, forzar ciclo completo de teclado (keydown + keypress)
+            const opts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true };
+            input.dispatchEvent(new KeyboardEvent('keydown', opts));
+            input.dispatchEvent(new KeyboardEvent('keypress', opts));
         }
 
-        // Delay para evitar bloqueos del navegador y detección por spam
-        await new Promise(resolve => setTimeout(resolve, 400));
+        // Pausa entre mensajes (WhatsApp congela el chat si mandas más rápido)
+        await new Promise(r => setTimeout(r, 450));
     }
-    return lines.length;
 }
 
 enviarScript(`
