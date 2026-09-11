@@ -1,25 +1,46 @@
-async function enviarScript(scriptText){
-	const lines = scriptText.split(/[\n\t]+/).map(line => line.trim()).filter(line => line);
-	main = document.querySelector("#main"),
-	textarea = main.querySelector(`div[contenteditable="true"]`)
-	
-	if(!textarea) throw new Error("Não há uma conversa aberta")
-	
-	for(const line of lines){
-		console.log(line)
-	
-		textarea.focus();
-		document.execCommand('insertText', false, line);
-		textarea.dispatchEvent(new Event('change', {bubbles: true}));
-	
-		setTimeout(() => {
-			(main.querySelector(`[data-testid="send"]`) || main.querySelector(`[data-icon="send"]`)).click();
-		}, 100);
-		
-		if(lines.indexOf(line) !== lines.length - 1) await new Promise(resolve => setTimeout(resolve, 250));
-	}
-	
-	return lines.length;
+async function enviarScript(scriptText) {
+    const lines = scriptText.split(/[\n\t]+/).map(line => line.trim()).filter(line => line);
+    
+    // Busca la caja de texto editable
+    const main = document.querySelector("#main");
+    const textarea = main ? main.querySelector('div[contenteditable="true"]') : null;
+
+    if (!textarea) {
+        throw new Error("No se encontró el chat abierto o la caja de texto.");
+    }
+
+    for (const line of lines) {
+        textarea.focus();
+        // Inserta el texto simulando escritura real
+        document.execCommand('insertText', false, line);
+        textarea.dispatchEvent(new Event('change', { bubbles: true }));
+
+        await new Promise(resolve => setTimeout(resolve, 250));
+
+        // Intenta hacer click en el botón de enviar (soporta selectores modernos)
+        const sendBtn = main.querySelector('button[aria-label="Enviar"]') || 
+                        main.querySelector('button[aria-label="Send"]') || 
+                        main.querySelector('span[data-icon="send"]')?.closest('button');
+
+        if (sendBtn) {
+            sendBtn.click();
+        } else {
+            // Alternativa: simular Enter por KeyboardEvent moderno
+            const enterEvent = new KeyboardEvent('keydown', {
+                key: 'Enter',
+                code: 'Enter',
+                keyCode: 13,
+                which: 13,
+                bubbles: true,
+                cancelable: true
+            });
+            textarea.dispatchEvent(enterEvent);
+        }
+
+        // Pausa entre mensajes para no congelar el navegador ni saturar la conexión
+        await new Promise(resolve => setTimeout(resolve, 300));
+    }
+    return lines.length;
 }
 
 enviarScript(`
