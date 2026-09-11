@@ -1,32 +1,34 @@
 async function enviarScript(scriptText) {
     const lines = scriptText.split(/[\n\t]+/).map(line => line.trim()).filter(line => line);
     
-    // Busca la caja de texto editable
-    const main = document.querySelector("#main");
+    // Localizar el cuadro editable del chat activo
+    const main = document.querySelector("#main") || document.querySelector('[data-testid="conversation-panel-wrapper"]');
     const textarea = main ? main.querySelector('div[contenteditable="true"]') : null;
 
     if (!textarea) {
-        throw new Error("No se encontró el chat abierto o la caja de texto.");
+        throw new Error("Abre primero una conversación en WhatsApp Web.");
     }
 
     for (const line of lines) {
         textarea.focus();
-        // Inserta el texto simulando escritura real
+        
+        // Escribir texto
         document.execCommand('insertText', false, line);
-        textarea.dispatchEvent(new Event('change', { bubbles: true }));
+        textarea.dispatchEvent(new Event('input', { bubbles: true }));
 
-        await new Promise(resolve => setTimeout(resolve, 250));
+        await new Promise(resolve => setTimeout(resolve, 200));
 
-        // Intenta hacer click en el botón de enviar (soporta selectores modernos)
-        const sendBtn = main.querySelector('button[aria-label="Enviar"]') || 
-                        main.querySelector('button[aria-label="Send"]') || 
-                        main.querySelector('span[data-icon="send"]')?.closest('button');
+        // Buscar el botón de envío por iconos SVG o selectores aria actuales
+        const sendBtn = main.querySelector('button span[data-icon="send"]')?.closest('button') ||
+                        main.querySelector('button[aria-label="Enviar"]') ||
+                        main.querySelector('button[aria-label="Send"]') ||
+                        main.querySelector('span[data-icon="send-light"]')?.closest('button');
 
         if (sendBtn) {
             sendBtn.click();
         } else {
-            // Alternativa: simular Enter por KeyboardEvent moderno
-            const enterEvent = new KeyboardEvent('keydown', {
+            // Si el botón no aparece, forzar el Enter directo al contenedor
+            const enterDown = new KeyboardEvent('keydown', {
                 key: 'Enter',
                 code: 'Enter',
                 keyCode: 13,
@@ -34,11 +36,11 @@ async function enviarScript(scriptText) {
                 bubbles: true,
                 cancelable: true
             });
-            textarea.dispatchEvent(enterEvent);
+            textarea.dispatchEvent(enterDown);
         }
 
-        // Pausa entre mensajes para no congelar el navegador ni saturar la conexión
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Delay para evitar bloqueos del navegador y detección por spam
+        await new Promise(resolve => setTimeout(resolve, 400));
     }
     return lines.length;
 }
